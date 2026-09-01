@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <h1>Instructor Dashboard</h1>
+
+    <h2>Create a New Course</h2>
+    <form id="courseForm">
+        <input type="text" id="title" placeholder="Course Title" required>
+        <textarea id="description" placeholder="Course Description" required></textarea>
+        <input type="number" id="price" placeholder="Price (0 for free)" value="0">
+        <button type="submit">Create Course</button>
+    </form>
+    <p id="courseMsg"></p>
+
+    <h2>Add a Lesson</h2>
+    <form id="lessonForm">
+        <select id="courseSelect" required></select>
+        <input type="text" id="lessonTitle" placeholder="Lesson Title" required>
+        <textarea id="lessonContent" placeholder="Lesson Content" required></textarea>
+        <input type="number" id="lessonOrder" placeholder="Order (1, 2, 3...)" value="1">
+        <input type="url" id="videoUrl" placeholder="YouTube video link (optional)">
+        <label style="font-size:0.9rem;color:#555;">Attach a PDF or PPT (optional)</label>
+        <input type="file" id="attachment" accept=".pdf,.ppt,.pptx">
+        <button type="submit">Add Lesson</button>
+    </form>
+    <p id="lessonMsg"></p>
+
+    <h2>Your Courses</h2>
+    <div id="myCourses">Loading...</div>
+
+    <h2>Manage Lessons</h2>
+    <div id="myLessons">Loading...</div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+requireAuth();
+
+const user = getUser();
+if (!user || user.role !== 'instructor') {
+    document.body.innerHTML = '<div class="container"><p class="error">Only instructors can access this page.</p></div>';
+}
+
+let myCoursesCache = [];
+let myLessonsCache = [];
+
+document.getElementById('courseForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('title').value;
+    const description = document.getElementById('description').value;
+    const price = Number(document.getElementById('price').value) || 0;
+    const msgEl = document.getElementById('courseMsg');
+
+    try {
+        await apiFetch('/courses', {
+            method: 'POST',
+            body: JSON.stringify({ title, description, price })
+        });
+        msgEl.textContent = 'Course created!';
+        msgEl.className = 'success';
+        document.getElementById('courseForm').reset();
+        loadMyCourses();
+    } catch (error) {
+        msgEl.textContent = error.message;
+        msgEl.className = 'error';
+    }
+});
+
+document.getElementById('lessonForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const courseId = document.getElementById('courseSelect').value;
+    const title = document.getElementById('lessonTitle').value;
+    const content = document.getElementById('lessonContent').value;
+    const order = document.getElementById('lessonOrder').value || 1;
+    const videoUrl = document.getElementById('videoUrl').value;
+    const fileInput = document.getElementById('attachment');
+    const msgEl = document.getElementById('lessonMsg');
+
+    if (!courseId) {
+        msgEl.textContent = 'Create a course first.';
+        msgEl.className = 'error';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('courseId', courseId);
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('order', order);
+    formData.append('videoUrl', videoUrl);
+    if (fileInput.files[0]) {
+        formData.append('attachment', fileInput.files[0]);
+    }
+
+    try {
+        const token = getToken();
+        const res = await fetch(`${API_BASE}/lessons`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.msg || 'Failed to add lesson');
+
+        msgEl.textContent = 'Lesson added!';
+        msgEl.className = 'success';
+        document.getElementById('lessonForm').reset();
+        loadMyLessons();
+    } catch (error) {
+        msgEl.textContent = error.message;
+        msgEl.className = 'error';
+    }
+});
+
+function populateCourseSelect() {
+    const select = document.getElementById('courseSelect');
+    select.innerHTML = myCoursesCache.map(c => `<option value="${c._id}">${c.title}</option>`).join('');
+}
+
+async function loadMyCourses() {
+    const listEl = document.getElementById('myCourses');
+    try {
+        const allCourses = await apiFetch('/courses');
+        myCoursesCache = allCourses.filter(c => c.instructor._id === user.id);
+
+        populateCourseSelect();
+
+        if (myCoursesCache.length === 0) {
+            listEl.innerHTML = '<p>You haven\'t created any courses yet.</p>';
+            return;
+        }
+
+        listEl.innerHTML = myCoursesCache.map(course => `
+            <div class="card">
+                <h3><a href="course-detail.html?id=${course._id}">${course.title}</a></h3>
+                <div class="meta">${course.price === 0 ? 'Free' : '₹' + course.price}</div>
+                <p>${course.description}</p>
+                <button class="danger" onclick="deleteCourse('${course._id}')">Delete Course</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        listEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+async function deleteCourse(id) {
+    if (!confirm('Are you sure you want to delete this course?')) return;
+    try {
+        await apiFetch(`/courses/${id}`, { method: 'DELETE' });
+        loadMyCourses();
+        loadMyLessons();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function loadMyLessons() {
+    const listEl = document.getElementById('myLessons');
+    try {
+        const allLessons = await apiFetch('/lessons');
+        myLessonsCache = allLessons.filter(l => l.course && l.course.instructor === user.id);
+
+        if (myLessonsCache.length === 0) {
+            listEl.innerHTML = '<p>No lessons yet.</p>';
+            return;
+        }
+
+        listEl.innerHTML = myLessonsCache.map(lesson => `
+            <div class="card" id="lesson-${lesson._id}">
+                <h3>${lesson.title}</h3>
+                <div class="meta">Course: <select onchange="moveLesson('${lesson._id}', this.value)">
+                    ${myCoursesCache.map(c => `<option value="${c._id}" ${c._id === lesson.course._id ? 'selected' : ''}>${c.title}</option>`).join('')}
+                </select></div>
+                <p>${lesson.content}</p>
+                <button class="danger" onclick="deleteLesson('${lesson._id}')">Delete Lesson</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        listEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+async function moveLesson(lessonId, newCourseId) {
+    try {
+        const formData = new FormData();
+        formData.append('courseId', newCourseId);
+        const token = getToken();
+        const res = await fetch(`${API_BASE}/lessons/${lessonId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.msg || 'Failed to move lesson');
+        alert('Lesson moved successfully!');
+        loadMyLessons();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function deleteLesson(id) {
+    if (!confirm('Are you sure you want to delete this lesson?')) return;
+    try {
+        await apiFetch(`/lessons/${id}`, { method: 'DELETE' });
+        loadMyLessons();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function init() {
+    await loadMyCourses();
+    await loadMyLessons();
+}
+
+init();
+</script>
+</body>
+</html>

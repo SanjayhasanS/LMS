@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>My Progress - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <h1>My Enrolled Courses</h1>
+    <div id="enrollmentList">Loading...</div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+requireAuth();
+
+async function loadEnrollments() {
+    const listEl = document.getElementById('enrollmentList');
+    try {
+        const enrollments = await apiFetch('/enrollments/my');
+
+        if (enrollments.length === 0) {
+            listEl.innerHTML = '<p>You are not enrolled in any courses yet. <a href="courses.html">Browse courses</a></p>';
+            return;
+        }
+
+        listEl.innerHTML = '<p>Loading progress...</p>';
+
+        const cards = await Promise.all(enrollments.map(async (enr) => {
+            const course = enr.course;
+            let percentage = 0;
+            try {
+                const progressData = await apiFetch(`/progress/${course._id}`);
+                percentage = progressData.percentage;
+            } catch (e) {
+                percentage = 0;
+            }
+
+            return `
+                <div class="card">
+                    <h3><a href="course-detail.html?id=${course._id}">${course.title}</a></h3>
+                    <div class="meta">${course.price === 0 ? 'Free' : '₹' + course.price}</div>
+                    <p>${course.description}</p>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${percentage}%"></div></div>
+                    <div class="meta">${percentage}% complete</div>
+                </div>
+            `;
+        }));
+
+        listEl.innerHTML = cards.join('');
+    } catch (error) {
+        listEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+loadEnrollments();
+</script>
+</body>
+</html>

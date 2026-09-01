@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sign Up - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <h1>Sign Up</h1>
+    <form id="signupForm">
+        <input type="text" id="name" placeholder="Full Name" required>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <select id="role">
+            <option value="student">Student</option>
+            <option value="instructor">Instructor</option>
+        </select>
+        <button type="submit">Sign Up</button>
+    </form>
+    <p id="message"></p>
+    <p>Already have an account? <a href="login.html">Login</a></p>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const role = document.getElementById('role').value;
+    const messageEl = document.getElementById('message');
+
+    try {
+        await apiFetch('/auth/signup', {
+            method: 'POST',
+            body: JSON.stringify({ name, email, password, role })
+        });
+        messageEl.textContent = 'Account created! Redirecting to login...';
+        messageEl.className = 'success';
+        setTimeout(() => window.location.href = 'login.html', 1500);
+    } catch (error) {
+        messageEl.textContent = error.message;
+        messageEl.className = 'error';
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Courses - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <h1>All Courses</h1>
+    <div id="courseList">Loading courses...</div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+
+async function loadCourses() {
+    const listEl = document.getElementById('courseList');
+    try {
+        const courses = await apiFetch('/courses');
+        if (courses.length === 0) {
+            listEl.innerHTML = '<p>No courses available yet.</p>';
+            return;
+        }
+        listEl.innerHTML = courses.map(course => `
+            <div class="card">
+                <h3><a href="course-detail.html?id=${course._id}">${course.title}</a></h3>
+                <div class="meta">By ${course.instructor.name} • ${course.price === 0 ? 'Free' : '₹' + course.price}</div>
+                <p>${course.description}</p>
+            </div>
+        `).join('');
+    } catch (error) {
+        listEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+loadCourses();
+</script>
+</body>
+</html>

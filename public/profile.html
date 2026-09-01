@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>My Profile - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <h1>My Profile</h1>
+    <div class="card" id="profileCard">Loading...</div>
+
+    <h2 id="sectionTitle">My Courses</h2>
+    <div id="sectionContent">Loading...</div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+requireAuth();
+
+const user = getUser();
+
+function renderProfileCard() {
+    document.getElementById('profileCard').innerHTML = `
+        <div class="meta">Name</div>
+        <p style="margin-bottom:0.75rem;font-weight:600;">${user.name}</p>
+        <div class="meta">Email</div>
+        <p style="margin-bottom:0.75rem;">${user.email}</p>
+        <div class="meta">Role</div>
+        <p style="text-transform:capitalize;">${user.role}</p>
+    `;
+}
+
+async function loadStudentProgress() {
+    document.getElementById('sectionTitle').textContent = 'My Enrolled Courses & Progress';
+    const contentEl = document.getElementById('sectionContent');
+    try {
+        const enrollments = await apiFetch('/enrollments/my');
+        if (enrollments.length === 0) {
+            contentEl.innerHTML = '<p>You are not enrolled in any courses yet. <a href="courses.html">Browse courses</a></p>';
+            return;
+        }
+
+        const cards = await Promise.all(enrollments.map(async (enr) => {
+            const course = enr.course;
+            let percentage = 0;
+            try {
+                const progressData = await apiFetch(`/progress/${course._id}`);
+                percentage = progressData.percentage;
+            } catch (e) {}
+
+            return `
+                <div class="card">
+                    <h3><a href="course-detail.html?id=${course._id}">${course.title}</a></h3>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${percentage}%"></div></div>
+                    <div class="meta">${percentage}% complete</div>
+                </div>
+            `;
+        }));
+
+        contentEl.innerHTML = cards.join('');
+    } catch (error) {
+        contentEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+async function loadInstructorCourses() {
+    document.getElementById('sectionTitle').textContent = 'Courses I Teach';
+    const contentEl = document.getElementById('sectionContent');
+    try {
+        const allCourses = await apiFetch('/courses');
+        const myCourses = allCourses.filter(c => c.instructor._id === user.id);
+
+        if (myCourses.length === 0) {
+            contentEl.innerHTML = '<p>You haven\'t created any courses yet. <a href="dashboard.html">Go to Dashboard</a></p>';
+            return;
+        }
+
+        contentEl.innerHTML = myCourses.map(course => `
+            <div class="card">
+                <h3><a href="course-detail.html?id=${course._id}">${course.title}</a></h3>
+                <div class="meta">${course.price === 0 ? 'Free' : '₹' + course.price}</div>
+                <p>${course.description}</p>
+            </div>
+        `).join('');
+    } catch (error) {
+        contentEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+renderProfileCard();
+if (user.role === 'student') {
+    loadStudentProgress();
+} else {
+    loadInstructorCourses();
+}
+</script>
+</body>
+</html>

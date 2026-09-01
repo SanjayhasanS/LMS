@@ -1,0 +1,13 @@
+{
+  "name": "Pathory - Learning Platform",
+  "short_name": "Pathory",
+  "description": "Learn new skills with courses, track your progress, and access lessons anytime.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#312e81",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml" }
+  ]
+}

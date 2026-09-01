@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Course Detail - Pathory</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#312e81">
+</head>
+<body>
+<nav id="nav"></nav>
+<div class="container">
+    <div id="courseInfo">Loading...</div>
+    <h2>Lessons</h2>
+    <div id="lessonList"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+renderNav();
+
+const params = new URLSearchParams(window.location.search);
+const courseId = params.get('id');
+const user = getUser();
+
+function getYouTubeEmbedUrl(url) {
+    if (!url) return null;
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+}
+
+async function loadCourse() {
+    const infoEl = document.getElementById('courseInfo');
+    const lessonEl = document.getElementById('lessonList');
+
+    try {
+        const course = await apiFetch(`/courses/${courseId}`);
+        let enrollButton = '';
+        if (user && user.role === 'student') {
+            enrollButton = `<button id="enrollBtn">Enroll in this course</button>`;
+        }
+
+        infoEl.innerHTML = `
+            <h1>${course.title}</h1>
+            <div class="meta">By ${course.instructor.name} • ${course.price === 0 ? 'Free' : '₹' + course.price}</div>
+            <p>${course.description}</p>
+            ${enrollButton}
+            <p id="enrollMsg"></p>
+        `;
+
+        if (document.getElementById('enrollBtn')) {
+            document.getElementById('enrollBtn').addEventListener('click', async () => {
+                const msgEl = document.getElementById('enrollMsg');
+                try {
+                    await apiFetch('/enrollments', {
+                        method: 'POST',
+                        body: JSON.stringify({ courseId })
+                    });
+                    msgEl.textContent = 'Enrolled successfully!';
+                    msgEl.className = 'success';
+                } catch (error) {
+                    msgEl.textContent = error.message;
+                    msgEl.className = 'error';
+                }
+            });
+        }
+
+        const lessons = await apiFetch(`/lessons/course/${courseId}`);
+        if (lessons.length === 0) {
+            lessonEl.innerHTML = '<p>No lessons added yet.</p>';
+        } else {
+            lessonEl.innerHTML = lessons.map(lesson => {
+                const embedUrl = getYouTubeEmbedUrl(lesson.videoUrl);
+                const videoHtml = embedUrl
+                    ? `<iframe width="100%" height="315" src="${embedUrl}" frameborder="0" allowfullscreen style="border-radius:8px;margin:0.5rem 0;"></iframe>`
+                    : '';
+                const attachmentHtml = (lesson.attachment && lesson.attachment.filename)
+                    ? `<p><a href="${API_BASE}/uploads/${lesson.attachment.filename}" target="_blank" download="${lesson.attachment.originalName}">📎 Download ${lesson.attachment.originalName}</a></p>`
+                    : '';
+
+                return `
+                    <div class="card">
+                        <h3>${lesson.order}. ${lesson.title}</h3>
+                        <p>${lesson.content}</p>
+                        ${videoHtml}
+                        ${attachmentHtml}
+                        ${user && user.role === 'student' ? `<button class="completeBtn" data-lesson="${lesson._id}">Mark Complete</button>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            document.querySelectorAll('.completeBtn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    try {
+                        await apiFetch('/progress/complete', {
+                            method: 'POST',
+                            body: JSON.stringify({ courseId, lessonId: btn.dataset.lesson })
+                        });
+                        btn.textContent = 'Completed ✓';
+                        btn.disabled = true;
+                    } catch (error) {
+                        alert(error.message);
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        infoEl.innerHTML = `<p class="error">${error.message}</p>`;
+    }
+}
+
+loadCourse();
+</script>
+</body>
+</html>
